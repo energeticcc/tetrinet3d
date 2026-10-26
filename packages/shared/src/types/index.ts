@@ -232,6 +232,8 @@ export interface JoinRoomMessage {
   name: string;
   /** NACHT 20 (Matchmaking-Hub): Ziel-Raum. Default = globale Arena ("arena"). */
   roomId?: string;
+  /** NACHT 20.5 (Passwort-Lobbys): Passwort für geschützte Lobbys. */
+  password?: string;
 }
 
 /**
@@ -256,11 +258,23 @@ export interface LobbyEntry {
   full: boolean;
   /** true, wenn das Spiel gerade läuft (INGAME). */
   inGame: boolean;
+  /**
+   * NACHT 20.5 (Passwort-Lobbys): true, wenn die Lobby passwortgeschützt ist.
+   * NUR das Flag wird übertragen — das Passwort selbst nie.
+   */
+  hasPassword: boolean;
 }
 
 /** NACHT 20: Broadcast an alle Clients — aktuelle Lobby-Liste. */
 export interface LobbiesUpdatedMessage {
   lobbies: LobbyEntry[];
+}
+
+/** NACHT 20.5: Beitritt abgelehnt (z. B. falsches Passwort) — Client bleibt im Lobby-Browser. */
+export interface LobbyDeniedMessage {
+  reason: "wrong_password" | "room_full";
+  /** Betroffene Lobby (zur Anzeige). */
+  roomId?: string;
 }
 
 /**

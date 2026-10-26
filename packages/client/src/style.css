@@ -1146,3 +1146,57 @@ b.team-name-editable:hover + .team-pencil,
   color: #7f92a8;
   font-size: 0.88rem;
 }
+/* NACHT 20.5: Passwort-Lobbys (Inline-Eingaben, keine window.prompt) */
+.lobby-error {
+  margin: 0 20px 10px;
+  padding: 9px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ffd0d0;
+  background: rgba(255, 70, 70, 0.14);
+  border: 1px solid rgba(255, 90, 90, 0.4);
+  border-radius: 8px;
+}
+.lobby-pwd-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.lobby-pwd-input {
+  width: 96px;
+  padding: 7px 9px;
+  font-size: 0.8rem;
+  color: #dfe9f5;
+  background: #0d1622;
+  border: 1px solid #24303f;
+  border-radius: 8px;
+  outline: none;
+}
+.lobby-pwd-input:focus { border-color: #35e0ff; }
+.lobby-join-pwd {
+  padding: 7px 10px;
+  font-size: 0.8rem;
+}
+.lobby-create-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.lobby-create-input {
+  flex: 1 1 120px;
+  padding: 11px;
+  font-size: 0.88rem;
+  color: #dfe9f5;
+  background: #0d1622;
+  border: 1px solid #24303f;
+  border-radius: 10px;
+  outline: none;
+}
+.lobby-create-input:focus { border-color: #35e0ff; }
+.lobby-create-row .lobby-create-btn {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 11px 18px;
+}

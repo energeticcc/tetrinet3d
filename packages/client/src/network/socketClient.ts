@@ -45,14 +45,14 @@ export class SocketClient {
   }
 
   /* --- Ausgabe (Client -> Server) --- */
-  /** NACHT 20 (Matchmaking-Hub): roomId optional — Default = globale Arena. */
-  joinRoom(name: string, roomId?: string): void {
-    this.socket.emit("join_room", { name, roomId });
+  /** NACHT 20 (Matchmaking-Hub): roomId optional — Default = globale Arena. NACHT 20.5: Passwort optional. */
+  joinRoom(name: string, roomId?: string, password?: string): void {
+    this.socket.emit("join_room", { name, roomId, password });
   }
 
-  /** NACHT 20: Eigene Lobby erstellen (6-stelliger Code, Host wird Leader). */
-  createLobby(name?: string): void {
-    this.socket.emit("create_lobby", { name });
+  /** NACHT 20: Eigene Lobby erstellen (6-stelliger Code, Host wird Leader). NACHT 20.5: optionales Passwort. */
+  createLobby(name?: string, password?: string): void {
+    this.socket.emit("create_lobby", { name, password });
   }
 
   renamePlayer(name: string): void {

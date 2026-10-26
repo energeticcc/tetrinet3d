@@ -35,6 +35,7 @@ function buildLobbies(rooms: Map<string, GameRoom>): LobbyEntry[] {
       speedMode: room.speedMode,
       full: room.players.length >= MAX_PLAYERS,
       inGame: room.status === "INGAME",
+      hasPassword: room.hasPassword, // NACHT 20.5: Flag nur ja/nein, nie Klartext
     });
   }
   // Vollsortierung: offene Lobbys zuerst, dann nach Name.
@@ -128,6 +129,12 @@ export function registerSocketHandlers(io: Server, rooms: Map<string, GameRoom>)
         leaveCurrentRoom(io, rooms, socket);
       }
       const room = getOrCreateRoom(io, rooms, roomId);
+      // NACHT 20.5: Passwort-Check — nur wenn der Socket NICHTS schon in diesem Raum ist.
+      const alreadyIn = room.players.some((p) => p.id === socket.id);
+      if (!alreadyIn && room.hasPassword && !room.checkPassword(payload?.password)) {
+        socket.emit("lobby_denied", { reason: "wrong_password", roomId });
+        return;
+      }
       room.addPlayer(socket, name); // Room selbst sendet room_full / broadcastRoomState
       // NACHT 20: Spieler-Anzahl geändert → Lobby-Liste (per Callback in Room).
     });
@@ -135,7 +142,7 @@ export function registerSocketHandlers(io: Server, rooms: Map<string, GameRoom>)
     /* ---------------------------------------------------------------- */
     /* create_lobby (NACHT 20: eigene Lobby erstellen + beitreten)        */
     /* ---------------------------------------------------------------- */
-    socket.on("create_lobby", (payload: { name?: string }) => {
+    socket.on("create_lobby", (payload: { name?: string; password?: string }) => {
       const hostName = sanitizeName((payload?.name as string) || (socket.data.playerName as string) || "Player");
       // NACHT 20: vorherigen Raum verlassen (Host zieht in die neue Lobby um).
       leaveCurrentRoom(io, rooms, socket);
@@ -144,6 +151,8 @@ export function registerSocketHandlers(io: Server, rooms: Map<string, GameRoom>)
       // Anzeigename: "Lobby <CODE>" (Host kann später umbenennen — Scope 3).
       const code = roomId.replace("lobby_", "");
       room.name = `Lobby ${code}`;
+      // NACHT 20.5: optionales Passwort (SHA-256-Hash, nie Klartext persistiert)
+      if (payload?.password) room.setPassword(payload.password);
       room.onPlayerCountChange = () => afterRoomChange(io, rooms); // NACHT 20
       rooms.set(roomId, room);
       if (room.addPlayer(socket, hostName)) {

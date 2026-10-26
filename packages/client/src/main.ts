@@ -109,6 +109,8 @@ class GameApp {
   private currentRoomName = "";
   /** true, wenn der Lobby-Browser-Overlay sichtbar ist. */
   private lobbyOpen = false;
+  /** NACHT 20.5: letzte Lobby-Ablehnung (z. B. falsches Passwort) — wird im Overlay gezeigt. */
+  private lobbyError: string | null = null;
   /** Bot-Stufe (aus bots_updated). */
   private botDifficulty: BotDifficulty | null = null;
   /** Ist der lokale Spieler Lobby-Leader (darf Bots verwalten)? */
@@ -593,7 +595,18 @@ class GameApp {
       const msg = data as { lobbies?: LobbyEntry[] };
       if (!msg.lobbies) return;
       this.lobbies = msg.lobbies;
+      this.lobbyError = null; // NACHT 20.5: neue Liste → Fehler ausblenden
       if (this.lobbyOpen) this.renderLobbyBrowser();
+    });
+
+    // NACHT 20.5: Passwort-Abweisung → Overlay (neu) öffnen + Fehler anzeigen.
+    s.on("lobby_denied", (data: unknown) => {
+      const msg = data as { reason?: string; roomId?: string };
+      if (msg.reason === "wrong_password") {
+        this.lobbyError = "⛔ Falsches Passwort für diese Lobby.";
+        this.logChat("system", "⛔ Beitritt abgelehnt: falsches Passwort.");
+      }
+      this.openLobbyBrowser();
     });
   }
 
@@ -879,21 +892,38 @@ class GameApp {
       document.body.appendChild(overlay);
     }
 
+    // NACHT 20.5: gesperrte Lobbys brauchen ein Inline-Passwort (keine window.prompt!).
+    const lockedPwds = new Set(this.lobbies.filter((l) => l.hasPassword && !l.full && l.roomId !== this.currentRoomId).map((l) => l.roomId));
+    const savedName = (localStorage.getItem("tetrinet3d_player_name") || this.localPlayerId).trim();
+
     const rows = this.lobbies
       .map((l) => {
         const here = l.roomId === this.currentRoomId ? " here" : "";
         const modeLabel = l.gameMode === "solo" ? "Solo" : l.gameMode === "team2" ? "2er" : "3er";
         const speedLabel = l.speedMode === "TETRIFAST" ? "⚡ TETRA" : "⏱ CLASSIC";
+        const lockIcon = l.hasPassword ? "🔒 " : "";
         const fullCls = l.full ? " full" : "";
+        const action = l.full
+          ? `<span class="lobby-full">Voll</span>`
+          : here
+            ? `<span class="lobby-here">Du bist hier</span>`
+            : l.hasPassword
+              ? `<div class="lobby-pwd-row">
+                   <input type="password" class="lobby-pwd-input" data-room="${l.roomId}" placeholder="Passwort" autocomplete="off" />
+                   <button class="lobby-join lobby-join-pwd" data-room="${l.roomId}">⏎</button>
+                 </div>`
+              : `<button class="lobby-join" data-room="${l.roomId}">Beitreten</button>`;
         return `<li class="lobby-row${fullCls}${here}">
           <div class="lobby-info">
-            <span class="lobby-name">${escapeHtml(l.name)}</span>
-            <span class="lobby-meta">${l.players}/${l.maxPlayers} · ${modeLabel} · ${speedLabel}${l.inGame ? " · 🎮 läuft" : ""}</span>
+            <span class="lobby-name">${lockIcon}${escapeHtml(l.name)}</span>
+            <span class="lobby-meta">${l.players}/${l.maxPlayers} · ${modeLabel} · ${speedLabel}${l.hasPassword ? " · 🔒" : ""}${l.inGame ? " · 🎮 läuft" : ""}</span>
           </div>
-          ${l.full ? `<span class="lobby-full">Voll</span>` : (here ? `<span class="lobby-here">Du bist hier</span>` : `<button class="lobby-join" data-room="${l.roomId}">Beitreten</button>`)}
+          ${action}
         </li>`;
       })
       .join("");
+
+    const errorLine = this.lobbyError ? `<div class="lobby-error">${escapeHtml(this.lobbyError)}</div>` : "";
 
     overlay.innerHTML = `
       <div class="lobby-overlay-box">
@@ -902,27 +932,59 @@ class GameApp {
           <button id="lobby-close" class="lobby-close">✕ Schließen</button>
         </div>
         <div class="lobby-current">Du bist in: <b>${escapeHtml(this.currentRoomName || this.currentRoomId || "Arena")}</b></div>
+        ${errorLine}
         <ul class="lobby-list">${rows || '<li class="lobby-empty">Keine offenen Lobbys — erstelle eine neue!</li>'}</ul>
         <div class="lobby-create">
-          <button id="lobby-create" class="lobby-create-btn">＋ Neue Lobby erstellen</button>
+          <div class="lobby-create-row">
+            <input type="text" id="lobby-create-name" class="lobby-create-input" placeholder="Dein Name" value="${escapeHtml(savedName)}" autocomplete="off" />
+            <input type="password" id="lobby-create-pwd" class="lobby-create-input" placeholder="Passwort (optional)" autocomplete="off" />
+            <button id="lobby-create" class="lobby-create-btn">＋ Neue Lobby</button>
+          </div>
         </div>
       </div>`;
 
     // Bindings (einmalig pro Render)
     overlay.querySelector<HTMLButtonElement>("#lobby-close")?.addEventListener("click", () => this.closeLobbyBrowser());
-    overlay.querySelector<HTMLButtonElement>("#lobby-create")?.addEventListener("click", () => {
-      const savedName = (localStorage.getItem("tetrinet3d_player_name") || "").trim();
-      this.socket.createLobby(savedName || undefined);
+
+    // NACHT 20.5: Lobby erstellen mit optionalem Passwort.
+    const doCreate = () => {
+      const nameEl = overlay.querySelector<HTMLTextAreaElement | HTMLInputElement>("#lobby-create-name");
+      const pwdEl = overlay.querySelector<HTMLInputElement>("#lobby-create-pwd");
+      const name = (nameEl?.value || "").trim() || undefined;
+      const pwd = (pwdEl?.value || "").trim() || undefined;
+      if (name) localStorage.setItem("tetrinet3d_player_name", name);
+      this.socket.createLobby(name, pwd);
+      this.lobbyError = null;
       // Server sendet room_state + lobbys_updated → UI aktualisiert sich selbst.
+    };
+    overlay.querySelector<HTMLButtonElement>("#lobby-create")?.addEventListener("click", doCreate);
+    overlay.querySelector<HTMLInputElement>("#lobby-create-pwd")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doCreate();
     });
+
+    // NACHT 20.5: Beitreten — offene Lobbys direkt, gesperrte mit Passwort.
     overlay.querySelectorAll<HTMLButtonElement>(".lobby-join").forEach((btn) => {
       btn.addEventListener("click", () => {
         const roomId = btn.dataset.room;
         if (!roomId) return;
-        const savedName = (localStorage.getItem("tetrinet3d_player_name") || this.localPlayerId).trim();
-        this.socket.joinRoom(savedName, roomId);
+        if (lockedPwds.has(roomId)) {
+          const pwdEl = overlay.querySelector<HTMLInputElement>(`.lobby-pwd-input[data-room="${roomId}"]`);
+          this.socket.joinRoom(savedName, roomId, pwdEl?.value || "");
+        } else {
+          this.socket.joinRoom(savedName, roomId);
+        }
         this.closeLobbyBrowser();
       });
+    });
+    overlay.querySelectorAll<HTMLInputElement>(".lobby-pwd-input").forEach((inp) => {
+      inp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          const roomId = inp.dataset.room;
+          if (roomId) this.socket.joinRoom(savedName, roomId, inp.value || "");
+          this.closeLobbyBrowser();
+        }
+      });
+      inp.addEventListener("focus", () => inp.select());
     });
   }
 

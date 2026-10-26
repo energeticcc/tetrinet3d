@@ -6,6 +6,7 @@ import { GameLoop } from "./GameLoop.js";
 import { BotAI, gridHeight, BOT_PRESETS } from "./BotAI.js";
 import { BOT_AUTOFILL, BOT_DEFAULT_DIFFICULTY, LOBBY_LEADER_NAME, READY_CHECK_MS, AFK_PENALTY_MS, TEAM_NAME_MAX_LEN } from "../config.js";
 import { BOT_AVATARS } from "@tetrinet3d/shared";
+import { createHash } from "node:crypto";
 
 /**
  * Verwaltet einen Raum mit bis zu 6 Spielern.
@@ -15,6 +16,12 @@ export class GameRoom {
   readonly roomId: string;
   /** NACHT 20 (Matchmaking-Hub): Anzeigename (Lobby-Browser + Topbar). */
   public name: string;
+  /**
+   * NACHT 20.5 (Passwort-Lobbys): SHA-256-Hash des Lobbypassworts
+   * (undefined = offen). Der Klartext existiert NIE auf dem Server —
+   * nur der Hash, Vergleich per `checkPassword()`.
+   */
+  public passwordHash: string | undefined;
   private io: Server;
   public players: Player[] = [];
   private loop: GameLoop | null = null;
@@ -103,6 +110,39 @@ export class GameRoom {
   public dispose(): void {
     this.loop?.stop();
     this.loop = null;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* NACHT 20.5 (Passwort-Lobbys)                                       */
+  /* ---------------------------------------------------------------- */
+
+  /** true, wenn die Lobby passwortgeschützt ist. */
+  public get hasPassword(): boolean {
+    return this.passwordHash !== undefined;
+  }
+
+  /**
+   * Prüft ein Klartext-Passwort gegen den gespeicherten SHA-256-Hash.
+   * Offene Lobbys (kein Hash) = immer `true`. Konstanter Zeitvergleich
+   * (Timing-Attacken irrelevant bei 64-Hex-Zeichen, aber sauber).
+   */
+  public checkPassword(candidate: string | undefined | null): boolean {
+    if (this.passwordHash === undefined) return true;
+    if (typeof candidate !== "string" || candidate.length === 0) return false;
+    const h = createHash("sha256").update(candidate).digest("hex");
+    if (h.length !== this.passwordHash.length) return false;
+    let diff = 0;
+    for (let i = 0; i < h.length; i++) diff |= h.charCodeAt(i) ^ this.passwordHash.charCodeAt(i);
+    return diff === 0;
+  }
+
+  /** Setzt ein Passwort (Klartext → Hash). Leer/undefined = Lobbypasswort entfernen. */
+  public setPassword(plain: string | undefined | null): void {
+    if (plain === undefined || plain === null || plain.length === 0) {
+      this.passwordHash = undefined;
+      return;
+    }
+    this.passwordHash = createHash("sha256").update(plain).digest("hex");
   }
 
   addPlayer(socket: Socket, name: string): boolean {
