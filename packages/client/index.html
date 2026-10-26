@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Tetrinet Arena</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- Das Three.js WebGL Canvas füllt den gesamten Hintergrund -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- UI Overlay für Spiel-Statistiken und Interfaces -->
+    <div id="ui-container">
+      <!-- Linke Spalte: Spieler im Raum · Chat · Bots -->
+      <div id="left-panel">
+        <div id="leaderboard">
+          <h3>Spieler im Raum</h3>
+          <ul id="player-list"></ul>
+        </div>
+
+        <!-- Bot-Panel (wird per JS eingebaut, nur für Lobby-Leader sichtbar) -->
+
+        <!-- Tastenbelegung (Nacht 12) -->
+        <div id="keybinds">
+          <h3>Tasten</h3>
+          <ul>
+            <li><kbd>◀</kbd><kbd>▶</kbd> bewegen</li>
+            <li><kbd>▲</kbd> drehen</li>
+            <li><kbd>▼</kbd> Soft-Drop (halten)</li>
+            <li><kbd>Space</kbd> Hard-Drop</li>
+            <li><kbd>G</kbd> Schattenstein (Ghost) an/aus</li>
+            <li><kbd>1</kbd>–<kbd>6</kbd> Front-Special abfeuern<br>(FIFO, 1=lokal, 2–6=Gegner)</li>
+            <li><kbd>M</kbd> Ton an/aus</li>
+            <li><kbd>R</kbd> Rematch (nach Game Over)</li>
+          </ul>
+        </div>
+
+        <!-- Specials-Legende (Nacht 16): Buchstaben-Blöcke im Feld + Kurzbeschreibung.
+             Position: unter Tasten, über Bots (dynamisch eingefügt). -->
+        <div id="specials-legend">
+          <h3>Special-Blöcke</h3>
+          <ul>
+            <li><span class="lg-letter" style="--c:#ff6600">A</span> Add Line — Zeile mit Lücke</li>
+            <li><span class="lg-letter" style="--c:#00aaff">C</span> Clear Line — letzte Zeile weg</li>
+            <li><span class="lg-letter" style="--c:#ffff44">B</span> Clear Specials — Specials→normal</li>
+            <li><span class="lg-letter" style="--c:#ff00cc">R</span> Random Clear — 10 Blöcke weg</li>
+            <li><span class="lg-letter" style="--c:#44ffff">O</span> Block Bomb — O-Blöcke 3×3</li>
+            <li><span class="lg-letter" style="--c:#ffcc00">S</span> Switch Fields — Felder tauschen</li>
+            <li><span class="lg-letter" style="--c:#66ff33">G</span> Block Gravity — alles runter</li>
+            <li><span class="lg-letter" style="--c:#cc88ff">Q</span> Quake — Zeilen links/rechts</li>
+            <li><span class="lg-letter" style="--c:#ff2222">N</span> Nuke — ganzes Feld löschen</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- "NÄCHSTE STEINE" Label rendert jetzt als 3D-Sprite ÜBER den Stücken (Nacht 12) -->
+
+      <!-- Specials-Inventar (Nacht 15): VERTIKALE LISTE in der freien Lücke zwischen
+           Hauptfeld & Gegnerfeldern. Aktiver Slot = dicker Rahmen.
+           Initial hidden — erscheint, sobald Specials im Inventar sind. -->
+      <div id="inventory-panel" class="hidden">
+        <div id="inventory-bar">
+          <div id="specials-list"></div>
+        </div>
+      </div>
+
+      <!-- Aktionen (Nacht 15): OBERER rechter Bereich — System-Events (Specials, Join/Leave, Rematch) -->
+      <div id="actions-box">
+        <div id="actions-log"></div>
+      </div>
+
+      <!-- Chat (Nacht 15): UNTERER rechter Bereich — Spieler-Chat -->
+      <div id="chat-box">
+        <div id="chat-log"></div>
+        <input type="text" id="chat-input" placeholder="Nachricht senden… (Enter)" maxlength="200" />
+      </div>
+
+      <!-- Status-Hinweise (Game Over / Winner) -->
+      <div id="status-banner" class="hidden"></div>
+
+      <!-- Touch-Buttons (nur auf Mobile/Tablet sichtbar, siehe CSS) -->
+      <div id="touch-panel"></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

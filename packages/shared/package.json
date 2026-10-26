@@ -1,0 +1,23 @@
+{
+  "name": "@tetrinet3d/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gemeinsame Typen, Konstanten und 2D-Spiellogik für Client & Server",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2"
+  }
+}
