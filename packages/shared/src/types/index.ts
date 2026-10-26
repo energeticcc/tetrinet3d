@@ -314,6 +314,11 @@ export interface GridUpdateMessage {
   queue?: number[];
   /** Aktueller Score (Live-Leaderboard). */
   score?: number;
+  /**
+   * NACHT 19.11: Aktuelles RAUM-LEVEL (Ø der individuellen Spieler-Level, levels.md)
+   * — identisch für alle Spieler im Raum. Client zeigt es im HUD an.
+   */
+  level?: number;
 }
 
 export interface SpecialsUpdateMessage {

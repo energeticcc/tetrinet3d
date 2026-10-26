@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { MAX_PLAYERS, applySpecialToGrid, swapGridContents, TEAM_SIZE, addGarbageLines, GARBAGE_LINES, TEAMS } from "@tetrinet3d/shared";
+import { MAX_PLAYERS, applySpecialToGrid, swapGridContents, TEAM_SIZE, addGarbageLines, GARBAGE_LINES, TEAMS, activeLevel } from "@tetrinet3d/shared";
 import type { PlayerRef, SpecialType, BotDifficulty, TeamMode, TeamId, RoomStatus, ReadyAbortReason } from "@tetrinet3d/shared";
 import { Player } from "./Player.js";
 import { GameLoop } from "./GameLoop.js";
@@ -1017,6 +1017,8 @@ export class GameRoom {
       activePiece: player.activePiece,
       queue: player.queue.slice(0, 5),
       score: player.score,
+      // NACHT 19.11: Aktuelles Raum-Level (Ø Spieler-Level) → Client-HUD.
+      level: activeLevel(this.players.map((p) => p.level)),
     });
   }
 

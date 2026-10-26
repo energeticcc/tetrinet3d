@@ -97,6 +97,27 @@ html {
   z-index: 10;
 }
 
+/* NACHT 19.11: Aktuelles Raum-Level — HUD oben Mitte */
+#level-hud {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  pointer-events: none;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 18px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  text-shadow: 0 0 8px var(--accent-soft);
+}
+
 #inventory-bar {
   width: 100%;
   box-sizing: border-box;

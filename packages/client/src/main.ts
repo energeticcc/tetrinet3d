@@ -67,6 +67,8 @@ class GameApp {
   private roomList: string[] = [];
   /** Namen + Score pro Spieler-ID (für das Live-Leaderboard). */
   private playerInfo = new Map<string, { name: string; score: number }>();
+  /** NACHT 19.11: Aktuelles RAUM-LEVEL (Ø Spieler-Level) — im HUD angezeigt. */
+  private currentLevel = 0;
   /** Eignes FIFO-Specials-Inventory (Index 0 = aktiv). */
   private myInventory: SpecialType[] = [];
   /**
@@ -274,6 +276,11 @@ class GameApp {
         const idx2 = this.roomList.indexOf(msg.playerId);
         const lost2 = this.playerStatus.get(msg.playerId) === "spectator" || this.playerStatus.get(msg.playerId) === "winner";
         this.arena.updateLabel(msg.playerId, info?.name ?? "", info?.score ?? 0, idx2 + 1, lost2);
+      }
+      // NACHT 19.11: Aktuelles Raum-Level im HUD zeigen (gleiche für alle).
+      if (msg.level !== undefined && msg.level !== this.currentLevel) {
+        this.currentLevel = msg.level;
+        this.updateLevelHud();
       }
       // Eigener Spieler: lokalem Predictions-Zustand überlagern (Server ist Wahrheit).
       if (msg.playerId === this.localPlayerId) {
@@ -494,6 +501,8 @@ class GameApp {
       this.oppInterp.clear();
       this.playerInfo.forEach((info) => (info.score = 0));
       this.playerStatus.clear();
+      this.currentLevel = 0;
+      this.updateLevelHud();
       this.hideBanner();
       this.updateInventoryUI();
       this.updateLeaderboard();
@@ -530,6 +539,8 @@ class GameApp {
       // Nacht 15 (Bug-Fix): Status-Cache leeren, sonst bleibt ein früherer
       // "spectator" haften → Feld dauerhaft gedimmt + Leaderboard-Badge falsch.
       this.playerStatus.clear();
+      this.currentLevel = 0;
+      this.updateLevelHud();
       this.hideBanner();
       this.updateInventoryUI();
       this.updateLeaderboard();
@@ -768,6 +779,16 @@ class GameApp {
       return `<li class="${cls}${ownCls}"${ownData}${ownTitle}><span class="p-name">${escapeHtml(r.name)}${teamTag}${botTag}</span><span class="p-score">${r.score}</span></li>`;
       })
       .join("");
+  }
+
+  /**
+   * NACHT 19.11: Aktuelles RAUM-LEVEL im HUD anzeigen (Ø der Spieler-Level).
+   * Wird bei jeder `level`-Änderung im `grid_update` aufgerufen.
+   */
+  private updateLevelHud(): void {
+    const el = document.getElementById("level-hud");
+    if (!el) return;
+    el.textContent = `Level ${this.currentLevel}`;
   }
 
   /**
