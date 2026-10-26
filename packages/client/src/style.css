@@ -983,12 +983,14 @@ b.team-name-editable:hover + .team-pencil,
 /* ====================================================================
    NACHT 20 (Matchmaking-Hub): Lobby-Browser (Overlay + Toggle-Button)
    ==================================================================== */
+/* NACHT 20.4 (Bug-Fix): Button war absolut positioniert + geerbtes
+   pointer-events:none (#ui-container) → klickbar NICHT. Jetzt Normal-Flow
+   oben im linken Panel (explizit pointer-events:auto). */
 .lobby-btn {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  z-index: 20;
-  padding: 8px 14px;
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 9px 14px;
   font-size: 0.85rem;
   font-weight: 700;
   color: #fff;
@@ -996,7 +998,7 @@ b.team-name-editable:hover + .team-pencil,
   border: 1px solid #00ccff;
   border-radius: 10px;
   cursor: pointer;
-  backdrop-filter: blur(6px);
+  pointer-events: auto;
   transition: background 0.15s ease, transform 0.1s ease;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }

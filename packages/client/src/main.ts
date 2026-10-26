@@ -700,7 +700,9 @@ class GameApp {
       e.stopPropagation();
     });
 
-    // NACHT 20 (Matchmaking-Hub): Schwebender Button — Lobby-Browser öffnen.
+    // NACHT 20 (Matchmaking-Hub): Button oben im linken Panel (Normal-Flow,
+    // klickbar — #ui-container hat pointer-events:none, daher NICHT absolut
+    // darüber schweben lassen). Toggle für den Lobby-Browser.
     let lobbyBtn = document.getElementById("lobby-btn");
     if (!lobbyBtn) {
       lobbyBtn = document.createElement("button");
@@ -708,7 +710,9 @@ class GameApp {
       lobbyBtn.className = "lobby-btn";
       lobbyBtn.textContent = "🏛 Lobbys";
       lobbyBtn.title = "Matchmaking-Hub: offene Lobbys ansehen / eigene erstellen";
-      (document.getElementById("ui-container") ?? document.body).appendChild(lobbyBtn);
+      const leftPanel = document.getElementById("left-panel");
+      if (leftPanel) leftPanel.insertBefore(lobbyBtn, leftPanel.firstChild);
+      else (document.getElementById("ui-container") ?? document.body).appendChild(lobbyBtn);
     }
     lobbyBtn.addEventListener("click", () => {
       if (this.lobbyOpen) this.closeLobbyBrowser();
@@ -868,7 +872,10 @@ class GameApp {
     if (!overlay) {
       overlay = document.createElement("div");
       overlay.id = "lobby-overlay";
-      overlay.className = "lobby-overlay";
+      // NACHT 20.4 (Bug-Fix): Overlay startet VERSTECKT — `openLobbyBrowser`
+      // nimmt das `hidden` explizit wieder weg. Ohne das war es nach dem
+      // ersten Render dauerhaft sichtbar (verdeckte den ganzen Screen).
+      overlay.className = "lobby-overlay hidden";
       document.body.appendChild(overlay);
     }
 
