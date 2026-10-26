@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="65%">
+      <stop offset="0%" stop-color="#2a1450"/>
+      <stop offset="100%" stop-color="#0c0618"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="48" cy="48" r="46" fill="url(#bg)" stroke="#b06bff" stroke-width="3"/>
+  <!-- nightmare demon: tall, hooded, void eyes -->
+  <path d="M26 30 Q48 16 70 30 L74 60 L60 78 L36 78 L22 60 Z" fill="#6a2fb0"/>
+  <!-- jagged crown-horns -->
+  <path d="M30 30 L24 12 L36 26 Z" fill="#d0a4ff"/>
+  <path d="M48 24 L48 8 L56 26 Z" fill="#d0a4ff"/>
+  <path d="M66 30 L72 12 L60 26 Z" fill="#d0a4ff"/>
+  <!-- glowing void eyes -->
+  <g filter="url(#glow)">
+    <ellipse cx="40" cy="50" rx="6" ry="8" fill="#e6ccff"/>
+    <ellipse cx="56" cy="50" rx="6" ry="8" fill="#e6ccff"/>
+  </g>
+  <!-- deep frown -->
+  <path d="M38 66 Q48 60 58 66" fill="none" stroke="#0c0618" stroke-width="3" stroke-linecap="round"/>
+  <!-- 5 difficulty pips -->
+  <circle cx="30" cy="84" r="2.6" fill="#b06bff"/>
+  <circle cx="39" cy="84" r="2.6" fill="#b06bff"/>
+  <circle cx="48" cy="84" r="2.6" fill="#b06bff"/>
+  <circle cx="57" cy="84" r="2.6" fill="#b06bff"/>
+  <circle cx="66" cy="84" r="2.6" fill="#b06bff"/>
+</svg>

@@ -1,10 +1,11 @@
 import { Server, Socket } from "socket.io";
 import { MAX_PLAYERS, applySpecialToGrid, swapGridContents, TEAM_SIZE, addGarbageLines, GARBAGE_LINES, TEAMS, activeLevel } from "@tetrinet3d/shared";
-import type { PlayerRef, SpecialType, BotDifficulty, TeamMode, TeamId, RoomStatus, ReadyAbortReason } from "@tetrinet3d/shared";
+import type { PlayerRef, SpecialType, BotDifficulty, TeamMode, TeamId, RoomStatus, ReadyAbortReason, GameMode } from "@tetrinet3d/shared";
 import { Player } from "./Player.js";
 import { GameLoop } from "./GameLoop.js";
 import { BotAI, gridHeight, BOT_PRESETS } from "./BotAI.js";
-import { BOT_AUTOFILL, BOT_DEFAULT_DIFFICULTY, BOT_NAMES, LOBBY_LEADER_NAME, READY_CHECK_MS, AFK_PENALTY_MS, TEAM_NAME_MAX_LEN } from "../config.js";
+import { BOT_AUTOFILL, BOT_DEFAULT_DIFFICULTY, LOBBY_LEADER_NAME, READY_CHECK_MS, AFK_PENALTY_MS, TEAM_NAME_MAX_LEN } from "../config.js";
+import { BOT_AVATARS } from "@tetrinet3d/shared";
 
 /**
  * Verwaltet einen Raum mit bis zu 6 Spielern.
@@ -12,6 +13,8 @@ import { BOT_AUTOFILL, BOT_DEFAULT_DIFFICULTY, BOT_NAMES, LOBBY_LEADER_NAME, REA
  */
 export class GameRoom {
   readonly roomId: string;
+  /** NACHT 20 (Matchmaking-Hub): Anzeigename (Lobby-Browser + Topbar). */
+  public name: string;
   private io: Server;
   public players: Player[] = [];
   private loop: GameLoop | null = null;
@@ -28,6 +31,13 @@ export class GameRoom {
    * (Neu-)Zuteilen per assignTeams() neu berechnet.
    */
   public gameMode: TeamMode = "solo";
+
+  /**
+   * NACHT 20 (Tempo-Modus): "CLASSIC" (Level-basierte Fallgeschwindigkeit)
+   * oder "TETRIFAST" (sofortiger Fall, tickMs=0). Default "CLASSIC". Gilt für
+   * ALLE Spieler im Raum identisch — GameLoop liest `speedMode` pro Tick.
+   */
+  public speedMode: GameMode = "CLASSIC";
 
   /**
    * NACHT 19 (mainmenu.md §2): Raum-Zustandsmaschine. DEV-Modus startet
@@ -50,8 +60,17 @@ export class GameRoom {
   /** Night 19: Seed für deterministische Randomizer (S2C_GameStart). */
   public lastSeed: number = (Math.random() * 0xffffffff) >>> 0;
 
+  /**
+   * NACHT 20 (Matchmaking-Hub): Callback, der bei jeder Änderung der
+   * Spieler-Anzahl ausgelöst wird (addPlayer/removePlayer/spawnBots).
+   * Der socketHandler nutzt es, um `lobbys_updated` an alle Clients zu senden.
+   */
+  public onPlayerCountChange: (() => void) | null = null;
+
   constructor(roomId: string, io: Server) {
     this.roomId = roomId;
+    // NACHT 20: Anzeigename = roomId (kann vom Lobby-Host überschrieben werden).
+    this.name = roomId;
     this.io = io;
     // NACHT 19: DEV-Modus = INGAME direkt (AI-Training + Auto-Start-Kompatibilität).
     // Release (devBots=false): LOBBY → Ready-Check → INGAME.
@@ -73,6 +92,17 @@ export class GameRoom {
    */
   private bindPlayer(player: Player): void {
     player.onClearedLines = (cleared) => this.handleClearedLines(player, cleared);
+  }
+
+  /** NACHT 20: Meldet eine Spieler-Anzahl-Änderung an den Lobby-Browser. */
+  private notifyPlayerCountChange(): void {
+    if (this.onPlayerCountChange) this.onPlayerCountChange();
+  }
+
+  /** NACHT 20: Stoppt die Game-Loop (bei Aufräumen leerer Custom-Lobbys). */
+  public dispose(): void {
+    this.loop?.stop();
+    this.loop = null;
   }
 
   addPlayer(socket: Socket, name: string): boolean {
@@ -113,6 +143,7 @@ export class GameRoom {
     // Raum-Liste (sortiert: lokaler Spieler zuerst) an ALLE senden
     this.broadcastRoomState();
     this.broadcastBots();
+    this.notifyPlayerCountChange(); // NACHT 20: Lobby-Browser auffrischen.
 
     // Game-Loop starten, sobald mindestens ein Spieler da ist
     if (!this.loop) {
@@ -154,6 +185,7 @@ export class GameRoom {
       });
       this.broadcastRoomStatus();
     }
+    this.notifyPlayerCountChange(); // NACHT 20: Lobby-Browser auffrischen.
   }
 
   /**
@@ -270,6 +302,27 @@ export class GameRoom {
         .join(", ");
       this.logChat("system", `Teams: ${roster}`);
     }
+  }
+
+  /**
+   * NACHT 20 (Tempo-Modus): "CLASSIC" (Level-basiert) oder "TETRIFAST"
+   * (sofortiger Fall). NUR der Lobby-Leader darf es ändern. Wirkt für ALLE
+   * Spieler ab dem nächsten GameLoop-Tick (dropInterval wird pro Tick gesetzt,
+   * s. GameLoop.step — kein Reset nötig).
+   */
+  setSpeedMode(socket: Socket, mode: GameMode): void {
+    if (mode !== "CLASSIC" && mode !== "TETRIFAST") {
+      this.io.to(socket.id).emit("chat", { from: "system", text: "Unbekannter Tempo-Modus." });
+      return;
+    }
+    if (!this.isLeader(socket)) {
+      this.io.to(socket.id).emit("chat", { from: "system", text: "Nur der Lobby-Leader kann das Tempo ändern." });
+      return;
+    }
+    if (this.speedMode === mode) return;
+    this.speedMode = mode;
+    this.broadcastRoomState();
+    this.logChat("system", `⚡ Tempo: ${mode === "TETRIFAST" ? "TETRIFAST (sofortiger Fall)" : "CLASSIC (Level-basiert)"}.`);
   }
 
   hasExactlyOneActive(): boolean {
@@ -801,9 +854,11 @@ export class GameRoom {
   private spawnBots(count: number, difficulty: BotDifficulty): number {
     const want = Math.max(0, Math.min(5, count | 0));
     let added = 0;
+    // NACHT 20 (Bot-Namen/-Avatare): thematisierter Namen-Pool pro Stufe.
+    const names = BOT_AVATARS[difficulty].names;
     for (let i = 0; i < want && this.players.length < MAX_PLAYERS; i++) {
       const id = "bot_" + Math.random().toString(36).slice(2, 8);
-      const name = BOT_NAMES[(this.bots.size + added) % BOT_NAMES.length];
+      const name = names[(this.bots.size + added) % names.length];
       const seed = (Date.now() ^ (added + 1) ^ 0xabcdef) >>> 0;
       const bot = new BotAI(id, name, seed, difficulty);
       this.players.push(bot.player);
@@ -832,6 +887,7 @@ export class GameRoom {
     const added = this.spawnBots(count, difficulty);
     if (added > 0) {
       this.logChat("system", `🤖 ${added} Bot(s) hinzugefügt (${BOT_PRESETS[difficulty].label}).`);
+      this.notifyPlayerCountChange(); // NACHT 20: Lobby-Browser auffrischen.
     }
   }
 
@@ -853,6 +909,7 @@ export class GameRoom {
       this.broadcastRoomState();
       this.broadcastBots();
       this.logChat("system", `🤖 ${ids.length} Bot(s) entfernt.`);
+      this.notifyPlayerCountChange(); // NACHT 20: Lobby-Browser auffrischen.
     }
   }
 
@@ -998,8 +1055,13 @@ export class GameRoom {
         players: sorted,
         selfIndex: 0,
         isLeader: leaderId === p.id,
+        // NACHT 20 (Matchmaking-Hub): Raum-ID + Anzeigename für Topbar/Lobby-Return.
+        roomId: this.roomId,
+        roomName: this.name,
         // Nacht 18: Aktueller Modus (undefined = Solo).
         gameMode: this.gameMode === "solo" ? undefined : this.gameMode,
+        // NACHT 20: Tempo-Modus (CLASSIC/TETRIFAST) für ALLE Spieler.
+        speedMode: this.speedMode,
         // NACHT 19: Raum-Status + Teamnamen (Custom oder Standard).
         roomStatus: this.status,
         teamNames: this.teamNames,

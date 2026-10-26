@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="65%">
+      <stop offset="0%" stop-color="#21454a"/>
+      <stop offset="100%" stop-color="#0c1a1c"/>
+    </radialGradient>
+  </defs>
+  <circle cx="48" cy="48" r="46" fill="url(#bg)" stroke="#37c9d6" stroke-width="3"/>
+  <!-- casual demon: rounded, relaxed brow -->
+  <ellipse cx="48" cy="52" rx="26" ry="23" fill="#2aa6b5"/>
+  <!-- medium horns -->
+  <path d="M28 36 q-8 -14 4 -16 q8 6 4 16z" fill="#7fe0e8"/>
+  <path d="M68 36 q8 -14 -4 -16 q-8 6 -4 16z" fill="#7fe0e8"/>
+  <!-- relaxed half-lidded eyes -->
+  <path d="M33 50 q7 -4 14 0" fill="none" stroke="#0c1a1c" stroke-width="3" stroke-linecap="round"/>
+  <path d="M49 50 q7 -4 14 0" fill="none" stroke="#0c1a1c" stroke-width="3" stroke-linecap="round"/>
+  <!-- smirk -->
+  <path d="M39 62 q9 4 18 -2" fill="none" stroke="#0c1a1c" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- 2 difficulty pips -->
+  <circle cx="42" cy="84" r="3" fill="#37c9d6"/>
+  <circle cx="54" cy="84" r="3" fill="#37c9d6"/>
+</svg>

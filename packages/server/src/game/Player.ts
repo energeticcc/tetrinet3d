@@ -142,6 +142,10 @@ export class Player {
     this.dropAccumulator += dt;
     let locked = false;
 
+    // NACHT 20 (TETRIFAST): dropInterval = 0 → KEIN Auto-Fall. Das Stück
+    // bleibt stehen, bis der Spieler SOFT_DROP/HARD_DROP drückt.
+    // (Schützt vor Endlosschleife: while(acc >= 0 && ...) würde unendlich drehen.)
+    if (this.dropInterval > 0) {
     while (this.dropAccumulator >= this.dropInterval && this.activePiece) {
       this.dropAccumulator -= this.dropInterval;
       if (tryMove(this.grid, this.activePiece, 0, 1)) {
@@ -154,6 +158,7 @@ export class Player {
         break;
       }
     }
+    } // NACHT 20: end of `if (this.dropInterval > 0)` — TETRIFAST: kein Auto-Fall.
 
     return { gridChanged: true, locked };
   }

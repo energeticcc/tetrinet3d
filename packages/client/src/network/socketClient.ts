@@ -45,8 +45,14 @@ export class SocketClient {
   }
 
   /* --- Ausgabe (Client -> Server) --- */
-  joinRoom(name: string): void {
-    this.socket.emit("join_room", { name });
+  /** NACHT 20 (Matchmaking-Hub): roomId optional — Default = globale Arena. */
+  joinRoom(name: string, roomId?: string): void {
+    this.socket.emit("join_room", { name, roomId });
+  }
+
+  /** NACHT 20: Eigene Lobby erstellen (6-stelliger Code, Host wird Leader). */
+  createLobby(name?: string): void {
+    this.socket.emit("create_lobby", { name });
   }
 
   renamePlayer(name: string): void {
@@ -85,6 +91,11 @@ export class SocketClient {
   /* --- Nacht 18: Spielmodus (Solo / 2er / 3er Teams, nur Leader) --- */
   setGameMode(mode: TeamMode): void {
     this.socket.emit("set_game_mode", { mode });
+  }
+
+  /* --- NACHT 20: Tempo-Modus (CLASSIC / TETRIFAST, nur Leader) --- */
+  setSpeedMode(mode: "CLASSIC" | "TETRIFAST"): void {
+    this.socket.emit("set_speed_mode", { mode });
   }
 
   /* --- Nacht 19 (mainmenu.md §2.1): Ready-Check + Start + Teamname --- */

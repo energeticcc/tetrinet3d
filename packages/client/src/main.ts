@@ -6,7 +6,7 @@ import { InputHandler } from "./input/inputHandler";
 import { TouchControls } from "./input/touchControls";
 import { SocketClient } from "./network/socketClient";
 import { AudioManager } from "./audio/AudioManager";
-import { SPECIALS, NEGATIVE_SPECIALS, BOT_DIFFICULTIES, PLAYER_COLORS, TEAMS } from "@tetrinet3d/shared";
+import { SPECIALS, NEGATIVE_SPECIALS, BOT_DIFFICULTIES, BOT_AVATARS, PLAYER_COLORS, TEAMS } from "@tetrinet3d/shared";
 import {
   tryMove,
   tryRotate,
@@ -31,12 +31,14 @@ import type {
   BotsUpdatedMessage,
   TeamMode,
   TeamId,
+  GameMode,
   LinesAttackMessage,
   RoomStatus,
   ReadyCheckInitMessage,
   PlayerReadyUpdateMessage,
   ReadyCheckAbortedMessage,
   GameStartMessage,
+  LobbyEntry,
 } from "@tetrinet3d/shared";
 
 /**
@@ -96,6 +98,17 @@ class GameApp {
   private playerStatus = new Map<string, PlayerStatus>();
   /** Set mit Bot-Ids (für Leaderboard-Markierung + Bot-Panel). */
   private botIds = new Set<string>();
+  /** NACHT 20: Bot-Stufe pro Spieler-ID (für den Avatar im Leaderboard). */
+  private botDifficulties = new Map<string, BotDifficulty>();
+
+  /* --- NACHT 20 (Matchmaking-Hub): Lobby-Browser --- */
+  /** Aktuelle Lobby-Liste (aus `lobbys_updated`). */
+  private lobbies: LobbyEntry[] = [];
+  /** Aktueller Raum (aus room_state) — für Topbar-Label + "Zurück". */
+  private currentRoomId = "";
+  private currentRoomName = "";
+  /** true, wenn der Lobby-Browser-Overlay sichtbar ist. */
+  private lobbyOpen = false;
   /** Bot-Stufe (aus bots_updated). */
   private botDifficulty: BotDifficulty | null = null;
   /** Ist der lokale Spieler Lobby-Leader (darf Bots verwalten)? */
@@ -107,6 +120,8 @@ class GameApp {
   private playerTeam = new Map<string, TeamId | undefined>();
   /** Nacht 18: Aktueller Spielmodus (aus room_state). */
   private teamMode: TeamMode = "solo";
+  /** NACHT 20 (Tempo-Modus): CLASSIC (Standard) / TETRIFAST (sofortiger Fall). */
+  private speedMode: GameMode = "CLASSIC";
   /** Nacht 18: Team-Panel-Referenz (nur bei Leader sichtbar). */
   private teamPanel: HTMLDivElement | null = null;
 
@@ -221,7 +236,11 @@ class GameApp {
       this.roomList = state.players.map((p) => p.id);
       for (const p of state.players) {
         this.playerInfo.set(p.id, { name: p.name, score: p.score ?? 0 });
-        if (p.isBot) this.botIds.add(p.id);
+        if (p.isBot) {
+          this.botIds.add(p.id);
+          // NACHT 20: Stufe merken → Avatar im Leaderboard (BOT_AVATARS[diff].avatar).
+          if (p.botDifficulty) this.botDifficulties.set(p.id, p.botDifficulty);
+        }
         // Nacht 17.2: Status aus room_state übernehmen (Ausscheidung bleibt sichtbar)
         if (p.status) this.playerStatus.set(p.id, p.status);
         // Nacht 18: Team-Zugehörigkeit (undefined = Solo)
@@ -229,10 +248,16 @@ class GameApp {
       }
       // Bots, die nicht mehr in der Liste sind, entfernen
       for (const id of [...this.botIds]) if (!state.players.some((p) => p.id === id)) this.botIds.delete(id);
+      for (const id of [...this.botDifficulties.keys()]) if (!state.players.some((p) => p.id === id)) this.botDifficulties.delete(id);
       for (const id of [...this.playerTeam.keys()]) if (!state.players.some((p) => p.id === id)) this.playerTeam.delete(id);
       this.amLeader = state.isLeader ?? false;
       // Nacht 18: Spielmodus (solo = undefined vom Server)
       this.teamMode = state.gameMode ?? "solo";
+      // NACHT 20: Tempo-Modus (CLASSIC/TETRIFAST).
+      if (state.speedMode) this.speedMode = state.speedMode;
+      // NACHT 20 (Matchmaking-Hub): Raum-ID + Name (Topbar + "Zurück").
+      if (state.roomId) this.currentRoomId = state.roomId;
+      if (state.roomName) this.currentRoomName = state.roomName;
       // NACHT 19: Raum-Status + Custom-Teamnamen.
       if (state.roomStatus) this.roomStatus = state.roomStatus;
       if (state.teamNames) this.teamNames = state.teamNames;
@@ -558,7 +583,17 @@ class GameApp {
     });
 
     s.on("room_full", () => {
-      this.logChat("system", "Raum ist voll. Warte auf einen freien Platz…");
+      this.logChat("system", "Raum ist voll — öffne den Lobby-Browser (🏛)");
+      // NACHT 20: Lobby-Browser anbieten (neue Lobby erstellen / andere beitreten).
+      this.openLobbyBrowser();
+    });
+
+    // NACHT 20 (Matchmaking-Hub): Aktuelle Lobby-Liste annehmen + rendern.
+    s.on("lobbys_updated", (data: unknown) => {
+      const msg = data as { lobbies?: LobbyEntry[] };
+      if (!msg.lobbies) return;
+      this.lobbies = msg.lobbies;
+      if (this.lobbyOpen) this.renderLobbyBrowser();
     });
   }
 
@@ -665,6 +700,21 @@ class GameApp {
       e.stopPropagation();
     });
 
+    // NACHT 20 (Matchmaking-Hub): Schwebender Button — Lobby-Browser öffnen.
+    let lobbyBtn = document.getElementById("lobby-btn");
+    if (!lobbyBtn) {
+      lobbyBtn = document.createElement("button");
+      lobbyBtn.id = "lobby-btn";
+      lobbyBtn.className = "lobby-btn";
+      lobbyBtn.textContent = "🏛 Lobbys";
+      lobbyBtn.title = "Matchmaking-Hub: offene Lobbys ansehen / eigene erstellen";
+      (document.getElementById("ui-container") ?? document.body).appendChild(lobbyBtn);
+    }
+    lobbyBtn.addEventListener("click", () => {
+      if (this.lobbyOpen) this.closeLobbyBrowser();
+      else this.openLobbyBrowser();
+    });
+
     /* ------------------------------------------------------------------ */
     /* Nacht 16.6: Rename auf der EIGENEN Leaderboard-Zeile.               */
     /* BINDING: Delegierter POINTERDOWN auf die stabile <ul> (#player-list) — */
@@ -756,6 +806,8 @@ class GameApp {
         status: this.playerStatus.get(pid) ?? "active",
         // Nacht 18: Team-Badge (nur im Team-Modus, sonst undefined).
         team: this.teamMode === "solo" ? undefined : this.playerTeam.get(pid),
+        // NACHT 20: Avatar-Pfad für Bots (thematic pro Stufe), sonst "".
+        avatar: this.botIds.has(pid) ? (BOT_AVATARS[this.botDifficulties.get(pid) ?? "too_young"]?.avatar ?? "") : "",
       }))
       .sort((a, b) => b.score - a.score);
     list.innerHTML = rows
@@ -776,7 +828,9 @@ class GameApp {
       const teamTag = r.team && TEAMS[r.team]
         ? ` <span class="team-badge" style="background:${hexCss(TEAMS[r.team].color)}" title="${TEAMS[r.team].label}">${r.team}</span>`
         : "";
-      return `<li class="${cls}${ownCls}"${ownData}${ownTitle}><span class="p-name">${escapeHtml(r.name)}${teamTag}${botTag}</span><span class="p-score">${r.score}</span></li>`;
+      // NACHT 20: Bot-Avatar (thematic pro Stufe) vor dem Namen.
+      const avatarTag = r.avatar ? `<img class="bot-avatar" src="${r.avatar}" alt="" aria-hidden="true"/>` : "";
+      return `<li class="${cls}${ownCls}"${ownData}${ownTitle}><span class="p-name">${avatarTag}${escapeHtml(r.name)}${teamTag}${botTag}</span><span class="p-score">${r.score}</span></li>`;
       })
       .join("");
   }
@@ -789,6 +843,80 @@ class GameApp {
     const el = document.getElementById("level-hud");
     if (!el) return;
     el.textContent = `Level ${this.currentLevel}`;
+  }
+
+  /* ================================================================== */
+  /* NACHT 20 (Matchmaking-Hub): Lobby-Browser                          */
+  /* ================================================================== */
+
+  /** Öffnet den Lobby-Browser-Overlay (Liste offener Lobbys + eigene erstellen). */
+  private openLobbyBrowser(): void {
+    this.lobbyOpen = true;
+    this.renderLobbyBrowser();
+    document.getElementById("lobby-overlay")?.classList.remove("hidden");
+  }
+
+  /** Schließt den Lobby-Browser (im aktuellen Raum bleiben). */
+  private closeLobbyBrowser(): void {
+    this.lobbyOpen = false;
+    document.getElementById("lobby-overlay")?.classList.add("hidden");
+  }
+
+  /** Baut den Lobby-Browser-Overlay (einmalig) und rendert die aktuelle Liste. */
+  private renderLobbyBrowser(): void {
+    let overlay = document.getElementById("lobby-overlay") as HTMLDivElement | null;
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "lobby-overlay";
+      overlay.className = "lobby-overlay";
+      document.body.appendChild(overlay);
+    }
+
+    const rows = this.lobbies
+      .map((l) => {
+        const here = l.roomId === this.currentRoomId ? " here" : "";
+        const modeLabel = l.gameMode === "solo" ? "Solo" : l.gameMode === "team2" ? "2er" : "3er";
+        const speedLabel = l.speedMode === "TETRIFAST" ? "⚡ TETRA" : "⏱ CLASSIC";
+        const fullCls = l.full ? " full" : "";
+        return `<li class="lobby-row${fullCls}${here}">
+          <div class="lobby-info">
+            <span class="lobby-name">${escapeHtml(l.name)}</span>
+            <span class="lobby-meta">${l.players}/${l.maxPlayers} · ${modeLabel} · ${speedLabel}${l.inGame ? " · 🎮 läuft" : ""}</span>
+          </div>
+          ${l.full ? `<span class="lobby-full">Voll</span>` : (here ? `<span class="lobby-here">Du bist hier</span>` : `<button class="lobby-join" data-room="${l.roomId}">Beitreten</button>`)}
+        </li>`;
+      })
+      .join("");
+
+    overlay.innerHTML = `
+      <div class="lobby-overlay-box">
+        <div class="lobby-head">
+          <h2>🏛 Matchmaking-Hub</h2>
+          <button id="lobby-close" class="lobby-close">✕ Schließen</button>
+        </div>
+        <div class="lobby-current">Du bist in: <b>${escapeHtml(this.currentRoomName || this.currentRoomId || "Arena")}</b></div>
+        <ul class="lobby-list">${rows || '<li class="lobby-empty">Keine offenen Lobbys — erstelle eine neue!</li>'}</ul>
+        <div class="lobby-create">
+          <button id="lobby-create" class="lobby-create-btn">＋ Neue Lobby erstellen</button>
+        </div>
+      </div>`;
+
+    // Bindings (einmalig pro Render)
+    overlay.querySelector<HTMLButtonElement>("#lobby-close")?.addEventListener("click", () => this.closeLobbyBrowser());
+    overlay.querySelector<HTMLButtonElement>("#lobby-create")?.addEventListener("click", () => {
+      const savedName = (localStorage.getItem("tetrinet3d_player_name") || "").trim();
+      this.socket.createLobby(savedName || undefined);
+      // Server sendet room_state + lobbys_updated → UI aktualisiert sich selbst.
+    });
+    overlay.querySelectorAll<HTMLButtonElement>(".lobby-join").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const roomId = btn.dataset.room;
+        if (!roomId) return;
+        const savedName = (localStorage.getItem("tetrinet3d_player_name") || this.localPlayerId).trim();
+        this.socket.joinRoom(savedName, roomId);
+        this.closeLobbyBrowser();
+      });
+    });
   }
 
   /**
@@ -1109,6 +1237,14 @@ class GameApp {
         </div>`
       : "";
 
+    // NACHT 20: Tempo-Auswahl: NUR Leader (CLASSIC = Level-basiert, TETRIFAST = sofortiger Fall).
+    const speedBtns = this.amLeader
+      ? `<div class="team-speed">
+          <button data-speed="CLASSIC" class="${this.speedMode === "CLASSIC" ? "active" : ""}">⏱ CLASSIC</button>
+          <button data-speed="TETRIFAST" class="${this.speedMode === "TETRIFAST" ? "active" : ""}">⚡ TETRIFAST</button>
+        </div>`
+      : `<div class="team-speed readonly"><span>${this.speedMode === "TETRIFAST" ? "⚡ TETRIFAST" : "⏱ CLASSIC"}</span></div>`;
+
     // NACHT 19: Status-Indikator + Start-/Cancel-Button (nur Leader, LOBBY/POST_GAME).
     const statusLabel: Record<RoomStatus, string> = {
       LOBBY: "🏛 Lobby",
@@ -1131,6 +1267,7 @@ class GameApp {
       ${startSection}
       <div class="team-panel-title">👥 Teams</div>
       ${modeBtns}
+      ${speedBtns}
       <div class="team-roster-box">${rosterHtml}</div>`;
 
     // Modus-Buttons (nur bei Leader vorhanden).
@@ -1138,6 +1275,14 @@ class GameApp {
       btn.addEventListener("click", () => {
         const m = btn.dataset.mode as TeamMode;
         if (m !== mode) this.socket.setGameMode(m); // Server → room_state → Re-Render
+      });
+    });
+
+    // NACHT 20: Tempo-Buttons (nur bei Leader klickbar, sonst read-only Anzeige).
+    panel!.querySelectorAll<HTMLButtonElement>(".team-speed button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const sm = btn.dataset.speed as GameMode;
+        if (sm !== this.speedMode) this.socket.setSpeedMode(sm); // Server → room_state → Re-Render
       });
     });
 

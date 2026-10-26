@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="70%">
+      <stop offset="0%" stop-color="#4a0a3a"/>
+      <stop offset="100%" stop-color="#12040e"/>
+    </radialGradient>
+    <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff5ec7"/>
+      <stop offset="100%" stop-color="#ff2a2a"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="48" cy="48" r="46" fill="url(#bg)" stroke="#ff2aa0" stroke-width="3.5"/>
+  <!-- ULTRA nightmare: wreathed in flame, apex demon -->
+  <g filter="url(#glow)">
+    <path d="M30 40 Q48 6 66 40 L60 74 L36 74 Z" fill="url(#flame)"/>
+  </g>
+  <!-- crown of flame-horns -->
+  <path d="M32 38 L22 10 L40 30 Z" fill="#ffd0ec"/>
+  <path d="M48 30 L44 4 L58 26 Z" fill="#ffd0ec"/>
+  <path d="M64 38 L74 10 L56 30 Z" fill="#ffd0ec"/>
+  <!-- all-seeing eyes (glowing) -->
+  <g filter="url(#glow)">
+    <path d="M33 50 L45 42 L45 58 Z" fill="#fff"/>
+    <path d="M63 50 L51 42 L51 58 Z" fill="#fff"/>
+  </g>
+  <!-- open maw -->
+  <path d="M36 64 L60 64 L56 74 L40 74 Z" fill="#1a0410"/>
+  <path d="M40 64 L44 68 L48 64 L52 68 L56 64" fill="none" stroke="#ffd0ec" stroke-width="1.5"/>
+  <!-- 6 difficulty pips (full row) -->
+  <circle cx="26" cy="84" r="2.4" fill="#ff2aa0"/>
+  <circle cx="34" cy="84" r="2.4" fill="#ff2aa0"/>
+  <circle cx="42" cy="84" r="2.4" fill="#ff2aa0"/>
+  <circle cx="50" cy="84" r="2.4" fill="#ff2aa0"/>
+  <circle cx="58" cy="84" r="2.4" fill="#ff2aa0"/>
+  <circle cx="66" cy="84" r="2.4" fill="#ff2aa0"/>
+</svg>

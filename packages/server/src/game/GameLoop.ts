@@ -64,7 +64,9 @@ export class GameLoop {
       this.room.players.map((p) => p.level),
       0,
     );
-    const { tickMs } = getTimings("CLASSIC", roomLevel);
+    // NACHT 20 (Tempo-Modus): Raum-Modus nutzen (CLASSIC = Level-basiert,
+    // TETRIFAST = tickMs 0 → sofortiger Fall). Default CLASSIC.
+    const { tickMs } = getTimings(this.room.speedMode ?? "CLASSIC", roomLevel);
     for (const player of this.room.players) {
       player.dropInterval = Math.max(1, tickMs);
     }

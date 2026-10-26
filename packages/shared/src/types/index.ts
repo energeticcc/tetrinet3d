@@ -1,6 +1,7 @@
 /**
  * Gemeinsame Typen für Client & Server (Tetrinet3D).
  */
+import type { GameMode } from "../levels.js";
 
 /** Zellen-Codes für eine Spielfeld-Matrix. */
 export const Cell = {
@@ -175,12 +176,104 @@ export const BOT_DIFFICULTIES: BotPresetInfo[] = [
   { key: "ultra_nightmare", label: "Ultra-Nightmare!",     desc: "Brutal — nahezu perfekt" },
 ];
 
+/**
+ * NACHT 20 (Bot-Namen/-Avatare pro Stufe): Thematisierte Namen + SVG-Avatar
+ * pro Schwierigkeitsstufe. Der Server wählt bei `spawnBots` aus `names`, der
+ * Client rendert `avatar` im Leaderboard (Pfad relativ zum Client-Root,
+ * Vite liefert aus `packages/client/public/avatars/`).
+ */
+export interface BotAvatarInfo {
+  /** Namen-Pool pro Stufe (Server wählt zufällig/cycling daraus). */
+  names: string[];
+  /** Pfad zum SVG-Avatar (Client rendert `<img src=avatar>`). */
+  avatar: string;
+  /** Kurzlabel (z.B. "Küken") für Accessible-Text / Tooltip. */
+  theme: string;
+}
+
+export const BOT_AVATARS: Record<BotDifficulty, BotAvatarInfo> = {
+  too_young: {
+    theme: "Junge Dämonen",
+    names: ["Küken", "Schnuffi", "Blipp", "Pupse", "Nucki", "Zappi"],
+    avatar: "/avatars/bot_too_young.svg",
+  },
+  not_rough: {
+    theme: "Lässige Dämonen",
+    names: ["Lucky", "Chill", "Breezy", "Pogo", "Dandy", "Mellow"],
+    avatar: "/avatars/bot_not_rough.svg",
+  },
+  hurt_me: {
+    theme: "Soldaten der Hölle",
+    names: ["Imp", "Mancubus", "LostSoul", "Brutus", "DoomImp", "ArmedSoul"],
+    avatar: "/avatars/bot_hurt_me.svg",
+  },
+  ultraviolence: {
+    theme: "Blutritter",
+    names: ["HellKnight", "Arachnotron", "SpiderMaster", "Caber", "Brutus", "Revenant"],
+    avatar: "/avatars/bot_ultraviolence.svg",
+  },
+  nightmare: {
+    theme: "Albtraum-Dämonen",
+    names: ["Nightmare", "Baron", "PainElemental", "DoomBot", "Pinky", "Spectre"],
+    avatar: "/avatars/bot_nightmare.svg",
+  },
+  ultra_nightmare: {
+    theme: "Apex-Dämonen",
+    names: ["UltraDemon", "Cacodemon", "Archbaron", "Revenant", "Caber", "DoomLord"],
+    avatar: "/avatars/bot_ultra_nightmare.svg",
+  },
+};
+
 /* ------------------------------------------------------------------ */
 /* Nachrichten: Client -> Server                                       */
 /* ------------------------------------------------------------------ */
 
 export interface JoinRoomMessage {
   name: string;
+  /** NACHT 20 (Matchmaking-Hub): Ziel-Raum. Default = globale Arena ("arena"). */
+  roomId?: string;
+}
+
+/**
+ * NACHT 20 (Matchmaking-Hub): Eintrag im Lobby-Browser. Der Server sendet
+ * `lobbys_updated` (Liste aller offenen Räume) an jeden verbundenen Client,
+ * sobald ein Raum erstellt/verlassen wird oder sich seine Spieler-Zahl ändert.
+ */
+export interface LobbyEntry {
+  /** Eindeutige Raum-ID (bei Beitritt als `roomId` übergeben). */
+  roomId: string;
+  /** Anzeigename (Host-Name oder generiert). */
+  name: string;
+  /** Anzahl der Spieler im Raum. */
+  players: number;
+  /** Maximale Spieler (MAX_PLAYERS=6). */
+  maxPlayers: number;
+  /** Aktueller Spielmodus (Solo/Teams) — für Filter. */
+  gameMode: TeamMode;
+  /** Tempo-Modus (CLASSIC/TETRIFAST) — für Filter/Anzeige. */
+  speedMode: GameMode;
+  /** true, wenn der Raum voll ist (Beitritt abgelehnt). */
+  full: boolean;
+  /** true, wenn das Spiel gerade läuft (INGAME). */
+  inGame: boolean;
+}
+
+/** NACHT 20: Broadcast an alle Clients — aktuelle Lobby-Liste. */
+export interface LobbiesUpdatedMessage {
+  lobbies: LobbyEntry[];
+}
+
+/**
+ * NACHT 20 (Scope-3-Reserve): MMR-Update. Noch nicht implementiert —
+ * Platzhalter für die SQLite/MMR-Phase (mainmenu.md §1.2 RANKED).
+ */
+export interface MmrUpdateMessage {
+  /** Neue MMR-Punkte des lokalen Spielers. */
+  mmr: number;
+  /** Delta (gewonnen/verloren) seit letztem Update. */
+  delta: number;
+  /** Globale Rang-Position (1 = best). */
+  rank: number;
 }
 
 export interface RenamePlayerMessage {
@@ -289,6 +382,12 @@ export interface RoomStateMessage {
    */
   gameMode?: TeamMode;
   /**
+   * NACHT 20 (Tempo-Modus): "CLASSIC" (Standard, Level-basierte Fallgeschwindigkeit)
+   * oder "TETRIFAST" (sofortiger Fall, tickMs=0). Default "CLASSIC". Gilt für
+   * ALLE Spieler im Raum (identisch) — Client zeigt den aktiven Modus im Setup-Panel.
+   */
+  speedMode?: GameMode;
+  /**
    * Nacht 19 (mainmenu.md §2): Aktueller Raum-Status (LOBBY/READY_CHECK/INGAME/
    * POST_GAME). Client rendert entsprechend (Overlay, Start-Button).
    */
@@ -304,6 +403,26 @@ export interface RoomStateMessage {
    * Team-Namen ändern (serverseitig erzwungen, s. `Room.editTeamName`).
    */
   teamLeaders?: Partial<Record<TeamId, string>>;
+  /**
+   * NACHT 20 (Matchmaking-Hub): Eindeutige Raum-ID ("arena" = Default,
+   * "lobby_<CODE>" = eigene Lobby). Wird für "Zurück" + Lobby-Beitritt genutzt.
+   */
+  roomId?: string;
+  /**
+   * NACHT 20 (Matchmaking-Hub): Anzeigename des Raums (z.B. "Lobby ABC123"
+   * oder ein vom Host gewählter Name). Default = roomId. Wird vom Lobby-Browser
+   * + Topbar angezeigt.
+   */
+  roomName?: string;
+  /* ------------------------------------------------------------------ */
+  /* Scope-3-Reserve (NACHT 20.4): Platzhalter für MMR / Ranked-Queues   */
+  /* ------------------------------------------------------------------ */
+  /** MMR-Punkte des lokalen Spielers (Scope 3: SQLite-Basis, noch nicht implementiert). */
+  myMMR?: number;
+  /** true, wenn der Raum ein Ranked-Match ist (Scope 3: noch nicht implementiert). */
+  isRanked?: boolean;
+  /** Globale MMR-Rang (1 = best) des lokalen Spielers (Scope 3). */
+  globalRank?: number;
 }
 
 export interface GridUpdateMessage {

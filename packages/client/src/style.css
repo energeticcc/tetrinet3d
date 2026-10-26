@@ -296,6 +296,20 @@ html {
   margin-left: 2px;
 }
 
+/* NACHT 20: Bot-Avatar (thematic pro Schwierigkeitsstufe) im Leaderboard. */
+#player-list li .p-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bot-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
 /* ====================================================================
    Bot-Panel (nur für den Lobby-Leader sichtbar) — im linken Panel
    ==================================================================== */
@@ -418,6 +432,35 @@ html {
   background: rgba(0, 204, 255, 0.22);
   border-color: #00ccff;
   color: #fff;
+}
+
+/* NACHT 20: Tempo-Auswahl (CLASSIC/TETRIFAST) — analog zu .team-modes. */
+.team-speed {
+  display: flex;
+  gap: 5px;
+}
+.team-speed button {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #ddd;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.team-speed button:hover { background: rgba(255, 255, 255, 0.12); }
+.team-speed button.active {
+  background: rgba(255, 170, 0, 0.24);
+  border-color: #ffaa00;
+  color: #fff;
+}
+.team-speed.readonly {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9aa;
 }
 
 .team-roster-box {
@@ -935,4 +978,169 @@ b.team-name-editable:hover + .team-pencil,
   padding: 1px 4px;
   margin-right: 4px;
   box-shadow: 0 0 6px var(--c, #fff);
+}
+
+/* ====================================================================
+   NACHT 20 (Matchmaking-Hub): Lobby-Browser (Overlay + Toggle-Button)
+   ==================================================================== */
+.lobby-btn {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 20;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0, 204, 255, 0.16);
+  border: 1px solid #00ccff;
+  border-radius: 10px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s ease, transform 0.1s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+.lobby-btn:hover { background: rgba(0, 204, 255, 0.3); }
+.lobby-btn:active { transform: scale(0.96); }
+
+.lobby-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 8, 14, 0.78);
+  backdrop-filter: blur(8px);
+}
+.lobby-overlay.hidden { display: none; }
+.lobby-overlay-box {
+  width: min(560px, 92vw);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #10151f, #0b0f16);
+  border: 1px solid #1f2a3a;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+.lobby-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #1f2a3a;
+}
+.lobby-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
+  color: #e8f4ff;
+}
+.lobby-close {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #cfd8e3;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid #2a3444;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.lobby-close:hover { background: rgba(255, 255, 255, 0.12); }
+.lobby-current {
+  padding: 10px 20px;
+  font-size: 0.82rem;
+  color: #9fb2c8;
+  border-bottom: 1px solid #16202e;
+  background: rgba(0, 204, 255, 0.04);
+}
+.lobby-current b { color: #e8f4ff; }
+.lobby-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  overflow-y: auto;
+  flex: 1;
+}
+.lobby-list::-webkit-scrollbar { width: 8px; }
+.lobby-list::-webkit-scrollbar-thumb { background: #24303f; border-radius: 4px; }
+.lobby-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid #121a26;
+  transition: background 0.12s ease;
+}
+.lobby-row:hover { background: rgba(255, 255, 255, 0.04); }
+.lobby-row.here { background: rgba(0, 204, 255, 0.08); }
+.lobby-row.full { opacity: 0.55; }
+.lobby-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lobby-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #eaf3ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lobby-meta {
+  font-size: 0.74rem;
+  color: #8298b0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lobby-full,
+.lobby-here {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #9fb2c8;
+}
+.lobby-join {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #06121a;
+  background: linear-gradient(180deg, #35e0ff, #00b8e0);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.1s ease;
+}
+.lobby-join:hover { filter: brightness(1.1); }
+.lobby-join:active { transform: scale(0.96); }
+.lobby-create {
+  padding: 14px 20px;
+  border-top: 1px solid #1f2a3a;
+}
+.lobby-create-btn {
+  width: 100%;
+  padding: 11px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #06121a;
+  background: linear-gradient(180deg, #ffd24a, #ff9a1f);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.1s ease;
+  box-shadow: 0 4px 18px rgba(255, 154, 31, 0.25);
+}
+.lobby-create-btn:hover { filter: brightness(1.08); }
+.lobby-create-btn:active { transform: scale(0.98); }
+.lobby-empty {
+  padding: 18px 20px;
+  text-align: center;
+  color: #7f92a8;
+  font-size: 0.88rem;
 }

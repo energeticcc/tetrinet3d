@@ -7,35 +7,147 @@ import type {
   ChatMessage,
   SpecialType,
   BotDifficulty,
+  LobbyEntry,
 } from "@tetrinet3d/shared";
+import { MAX_PLAYERS } from "@tetrinet3d/shared";
 import { GameRoom } from "../game/Room.js";
+
+/**
+ * NACHT 20 (Matchmaking-Hub): Der Default-Raum ist die globale Arena.
+ * AI-Agenten + der klassische "just join"-Flow landen dort. Custom-Lobbys
+ * werden via `create_lobby` erzeugt und erscheinen im Lobby-Browser.
+ */
+const DEFAULT_ROOM = "arena";
+
+/**
+ * NACHT 20: Baut die Lobby-Liste aus allen aktiven Räumen. Der Default-Raum
+ * wird als "Arena (Default)" gelabelt, damit man jederzeit zurückkehren kann.
+ */
+function buildLobbies(rooms: Map<string, GameRoom>): LobbyEntry[] {
+  const list: LobbyEntry[] = [];
+  for (const [roomId, room] of rooms) {
+    list.push({
+      roomId,
+      name: roomId === DEFAULT_ROOM ? "Arena (Default)" : room.name,
+      players: room.players.length,
+      maxPlayers: MAX_PLAYERS,
+      gameMode: room.gameMode,
+      speedMode: room.speedMode,
+      full: room.players.length >= MAX_PLAYERS,
+      inGame: room.status === "INGAME",
+    });
+  }
+  // Vollsortierung: offene Lobbys zuerst, dann nach Name.
+  list.sort((a, b) => {
+    if (a.full !== b.full) return a.full ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
+  return list;
+}
+
+/** NACHT 20: Broadcast der Lobby-Liste an ALLE verbundenen Clients. */
+function broadcastLobbies(io: Server, rooms: Map<string, GameRoom>): void {
+  io.emit("lobbys_updated", { lobbies: buildLobbies(rooms) });
+}
+
+/**
+ * NACHT 20: Aufräumen + Broadcast nach jedem Raum-Änderungs-Ereignis
+ * (Join/Leave). Leere Custom-Lobbys werden entfernt (die Default-Arena bleibt).
+ */
+function afterRoomChange(io: Server, rooms: Map<string, GameRoom>): void {
+  for (const [roomId, room] of rooms) {
+    if (roomId !== DEFAULT_ROOM && room.players.length === 0) {
+      room.dispose(); // NACHT 20: Game-Loop stoppen
+      rooms.delete(roomId);
+    }
+  }
+  broadcastLobbies(io, rooms);
+}
+
+/** NACHT 20: Erzeugt eine eindeutige 6-Zeichen-Lobby-Code (ohne Verwechslungs-Chars). */
+function makeRoomCode(): string {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // keine I/L/O/0/1
+  let code = "";
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return "lobby_" + code;
+}
 
 /**
  * Verarbeitet eingehende WebSocket-Events und leitet sie an die Räume weiter.
  * Ein Socket kann in genau einem Raum aktiv sein (Socket.data.roomId).
  */
+/**
+ * NACHT 20: Holt einen Raum oder erzeugt ihn — und wiret dabei immer den
+ * `onPlayerCountChange`-Callback (→ `lobbys_updated`), damit sich die
+ * Lobby-Liste bei JEDEM Join/Leave automatisch auffrischt.
+ */
+function getOrCreateRoom(io: Server, rooms: Map<string, GameRoom>, roomId: string): GameRoom {
+  let room = rooms.get(roomId);
+  if (!room) {
+    room = new GameRoom(roomId, io);
+    rooms.set(roomId, room);
+  }
+  room.onPlayerCountChange = () => afterRoomChange(io, rooms);
+  return room;
+}
+
+/**
+ * NACHT 20: Verlässt der Socket seinen AKTUELLEN Raum (falls vorhanden),
+ * bevor er einen anderen betritt. Verhindert "Spieler in zwei Räumen".
+ */
+function leaveCurrentRoom(io: Server, rooms: Map<string, GameRoom>, socket: Socket): void {
+  const currentId = socket.data.roomId as string | undefined;
+  if (currentId && rooms.has(currentId)) {
+    rooms.get(currentId)?.removePlayer(socket);
+  }
+  afterRoomChange(io, rooms);
+}
+
 export function registerSocketHandlers(io: Server, rooms: Map<string, GameRoom>): void {
   io.on("connection", (socket: Socket) => {
     // Bereits in einem Raum? Dann alten Raum verlassen
     const prevRoomId = socket.data.roomId as string | undefined;
     if (prevRoomId && rooms.has(prevRoomId)) {
       rooms.get(prevRoomId)?.removePlayer(socket);
+      afterRoomChange(io, rooms);
     }
 
+    // NACHT 20: Initial Lobby-Liste senden (Client rendert den Lobby-Browser).
+    getOrCreateRoom(io, rooms, DEFAULT_ROOM);
+    broadcastLobbies(io, rooms);
+
     /* ---------------------------------------------------------------- */
-    /* join_room                                                         */
+    /* join_room (NACHT 20: roomId wählbar, Default = "arena")           */
     /* ---------------------------------------------------------------- */
     socket.on("join_room", (payload: JoinRoomMessage) => {
       const name = sanitizeName(payload?.name);
-      const roomId = "arena"; // Einzelne globale Arena
-      let room = rooms.get(roomId);
-      if (!room) {
-        room = new GameRoom(roomId, io);
-        rooms.set(roomId, room);
+      socket.data.playerName = name; // NACHT 20: für create_lobby + Anzeige
+      const roomId = payload?.roomId ?? DEFAULT_ROOM;
+      // NACHT 20: vorherigen Raum verlassen (kein "Spieler in zwei Räumen").
+      if (socket.data.roomId && socket.data.roomId !== roomId) {
+        leaveCurrentRoom(io, rooms, socket);
       }
-      if (!room.addPlayer(socket, name)) {
-        // Raum voll
-        return;
+      const room = getOrCreateRoom(io, rooms, roomId);
+      room.addPlayer(socket, name); // Room selbst sendet room_full / broadcastRoomState
+      // NACHT 20: Spieler-Anzahl geändert → Lobby-Liste (per Callback in Room).
+    });
+
+    /* ---------------------------------------------------------------- */
+    /* create_lobby (NACHT 20: eigene Lobby erstellen + beitreten)        */
+    /* ---------------------------------------------------------------- */
+    socket.on("create_lobby", (payload: { name?: string }) => {
+      const hostName = sanitizeName((payload?.name as string) || (socket.data.playerName as string) || "Player");
+      // NACHT 20: vorherigen Raum verlassen (Host zieht in die neue Lobby um).
+      leaveCurrentRoom(io, rooms, socket);
+      const roomId = makeRoomCode();
+      const room = new GameRoom(roomId, io);
+      // Anzeigename: "Lobby <CODE>" (Host kann später umbenennen — Scope 3).
+      const code = roomId.replace("lobby_", "");
+      room.name = `Lobby ${code}`;
+      room.onPlayerCountChange = () => afterRoomChange(io, rooms); // NACHT 20
+      rooms.set(roomId, room);
+      if (room.addPlayer(socket, hostName)) {
+        socket.emit("chat", { from: "system", text: `🏛 Lobby ${code} erstellt. Teile den Code, um Freunde einzuladen.` });
       }
     });
 
@@ -127,6 +239,19 @@ export function registerSocketHandlers(io: Server, rooms: Map<string, GameRoom>)
       const mode = payload?.mode;
       if (mode === "solo" || mode === "team2" || mode === "team3") {
         room.setGameMode(socket, mode);
+      }
+    });
+
+    /* ---------------------------------------------------------------- */
+    /* set_speed_mode (NACHT 20: CLASSIC / TETRIFAST, nur Leader)        */
+    /* ---------------------------------------------------------------- */
+    socket.on("set_speed_mode", (payload: { mode?: string }) => {
+      const roomId = socket.data.roomId as string | undefined;
+      const room = roomId ? rooms.get(roomId) : undefined;
+      if (!room) return;
+      const mode = payload?.mode;
+      if (mode === "CLASSIC" || mode === "TETRIFAST") {
+        room.setSpeedMode(socket, mode);
       }
     });
 
